@@ -1,9 +1,10 @@
+import Homepage from './pages/home'
+
 function App() {
 
   return (
     <>
-      <style>
-      </style>
+      <Homepage />
     </>
   )
 }
