@@ -34,6 +34,10 @@ def _make_sticker(raw: bytes) -> bytes:
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
     img.thumbnail((MAX_SIDE, MAX_SIDE))
 
+    # A (near-)uniform image can't contain a garment; skip the model entirely.
+    if all(hi - lo <= 2 for lo, hi in img.getextrema()):
+        raise ValueError("No clothing item detected in the image")
+
     cut = remove(img, session=_get_session()).convert("RGBA")
     alpha = cut.getchannel("A")
 

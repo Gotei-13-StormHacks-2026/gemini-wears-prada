@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from PIL import Image
 
-from app.data.models import ItemCreate, ItemRecord
+from app.data.models import ItemCreate, ItemMetadata, ItemRecord
 from app.services.extraction import (
     ALPHA_THRESHOLD,
     MAX_SIDE,
@@ -141,28 +141,22 @@ async def test_extract_outfit_as_stickers():
     settings = MagicMock()
     settings.bucket = "test-bucket"
 
-    fake_metadata = MagicMock()
-    fake_metadata.model_dump.return_value = {
-        "category": "shirt",
-        "primary_colour": "black",
-        "secondary_colour": None,
-        "other_colours": [],
-        "description": "Test shirt",
-    }
+    # A real ItemMetadata, so the fake can't drift from the actual model again.
+    fake_metadata = ItemMetadata(
+        category="top", primary_color="black", description="Test shirt"
+    )
+    label = AsyncMock(return_value=fake_metadata)
 
     with (
         patch(
-            "app.services.extract_outfit.get_client",
+            "app.services.extraction.get_client",
             new=AsyncMock(return_value=client),
         ),
         patch(
-            "app.services.extract_outfit.get_settings",
+            "app.services.extraction.get_settings",
             return_value=settings,
         ),
-        patch(
-            "app.services.extract_outfit.label_item",
-            new=AsyncMock(return_value=fake_metadata),
-        ),
+        patch("app.services.extraction.label_item", new=label),
     ):
         result = await extract_outfit_as_stickers(item)
 
@@ -195,8 +189,13 @@ async def test_extract_outfit_as_stickers():
     assert uploaded_image.format == "PNG"
     assert uploaded_image.mode == "RGBA"
 
-    # Labeling should receive the generated sticker.
-    fake_metadata.model_dump.assert_called_once()
+    # The labelled metadata should end up on the returned record.
+    assert result.category == "top"
+    assert result.primary_color == "black"
+
+    # Labeling should receive the exact sticker that was uploaded.
+    label.assert_awaited_once()
+    assert label.await_args.args[0] == uploaded_bytes
 
 
 @pytest.mark.asyncio
@@ -233,15 +232,15 @@ async def test_extract_outfit_does_not_upload_when_labeling_fails():
 
     with (
         patch(
-            "app.services.extract_outfit.get_client",
+            "app.services.extraction.get_client",
             new=AsyncMock(return_value=client),
         ),
         patch(
-            "app.services.extract_outfit.get_settings",
+            "app.services.extraction.get_settings",
             return_value=settings,
         ),
         patch(
-            "app.services.extract_outfit.label_item",
+            "app.services.extraction.label_item",
             new=AsyncMock(side_effect=RuntimeError("labeling failed")),
         ),
     ):
@@ -250,4 +249,3 @@ async def test_extract_outfit_does_not_upload_when_labeling_fails():
 
     # The implementation intentionally labels before uploading.
     storage.upload.assert_not_awaited()
-
