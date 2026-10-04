@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from app.data.models import ItemCreate, ItemRecord
-from app.services.extract_outfit import (
+from app.services.extraction import (
     ALPHA_THRESHOLD,
     MAX_SIDE,
     _make_sticker,

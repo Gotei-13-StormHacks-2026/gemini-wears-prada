@@ -11,7 +11,7 @@ from app.data.supabase_client import get_client, get_settings
 logger = logging.getLogger(__name__)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-M0DEL_NAME = "gemini-3.8-flash"  # Fully eligible for the free tier
+MODEL_NAME = "gemini-3.8-flash"  # Fully eligible for the free tier
 AGENT_PERSONA = [
         "You are a fashion critic, a personality like Miranda Priestly from The Devil Wears Prada. "
         "You are to look at the fashion features provided in the image uploaded and roast this outfit in a funny manner, "
