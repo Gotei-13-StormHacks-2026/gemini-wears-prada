@@ -6,6 +6,20 @@ from pydantic import BaseModel, Field
 
 
 ItemCategory = Literal["top", "bottom", "outerwear", "shoes", "accessory"]
+ImageContentType = Literal["image/jpeg", "image/png", "image/webp", "image/gif"]
+
+
+class ItemUploadRequest(BaseModel):
+    content_type: ImageContentType
+
+
+class ItemUploadResponse(BaseModel):
+    image_ref: str
+    token: str
+
+
+class RoastImageRequest(BaseModel):
+    image_ref: str = Field(min_length=1)
 
 
 class ItemCreate(BaseModel):
@@ -14,6 +28,7 @@ class ItemCreate(BaseModel):
     image_ref: str = Field(min_length=1)
     name: str | None = None
     notes: str | None = None
+    category: ItemCategory | None = None
 
 
 class ItemMetadata(BaseModel):

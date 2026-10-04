@@ -1,42 +1,84 @@
-import requests
+import asyncio
+
 from google import genai
 from google.genai import types
-from app.config import GEMINI_API_KEY
 
+from app.config import GEMINI_API_KEY
+from app.data.models import ItemMetadata
+from app.data.supabase_client import get_client, get_settings
+
+MODEL_NAME = "gemini-3.8-flash"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-M0DEL_NAME = "gemini-3.8-flash"  # Fully eligible for the free tier
-PROMPT = [
-        "You are a fashion critic, a personality like Miranda Priestly from The Devil Wears Prada. "
-        "You are to look at the fashion features provided in the image uploaded and roast this outfit in a funny manner, "
-        "while providing constructive criticism and genuine feedback. "
-        "You MUST run the `outfit_score` tool to get the rating, then write a short summary explaining it."]
+
+_IMAGE_MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
+
+def _image_mime_type(image_ref: str) -> str:
+    suffix = "." + image_ref.rsplit(".", 1)[-1].lower() if "." in image_ref else ""
+    mime_type = _IMAGE_MIME_TYPES.get(suffix)
+    if mime_type is None:
+        raise ValueError("The uploaded image has an unsupported file type.")
+    return mime_type
+
+
+async def _download_image(image_ref: str) -> bytes:
+    settings = get_settings()
+    supabase = await get_client()
+    return await supabase.storage.from_(settings.bucket).download(image_ref)
+
+
+async def analyze_item_image(image_data: bytes, mime_type: str) -> ItemMetadata:
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not configured.")
+
+    def generate_metadata():
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[
+                "Identify this clothing item. Return its category (top, bottom, outerwear, shoes, or accessory), "
+                "primary color, optional secondary color, and a concise visual description. Do not infer brand or fabric.",
+                types.Part.from_bytes(data=image_data, mime_type=mime_type),
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0,
+                response_mime_type="application/json",
+                response_schema=ItemMetadata,
+            ),
+        )
+        if not response.text:
+            raise ValueError("Gemini returned an empty item description.")
+        return ItemMetadata.model_validate_json(response.text)
+
+    return await asyncio.to_thread(generate_metadata)
+
 
 async def generate_roast_for_image(image_ref: str) -> str:
-    """Generate an outfit roast from an image stored in Supabase Storage.
+    """Generate a short roast for an image stored in Supabase Storage."""
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not configured.")
 
-    `image_ref` is the Supabase Storage object path/reference for the image.
-    """
-    
-    try:
-        # TODO: Resolve image_ref to image data using Supabase Storage.
-        pass
-    except requests.exceptions.RequestException as e:
-        raise ValueError(f"Failed to pull image asset from Supabase: {str(e)}")
+    mime_type = _image_mime_type(image_ref)
+    image_data = await _download_image(image_ref)
 
-    # Create a request payload
-    payload = {
-        "model": M0DEL_NAME,
-        "contents": [
-            PROMPT,
-            image_data
-        ],
-        "config": {
-            "temperature": 0.0  # Keeps reasoning focused and stable
-        }
-    }
+    def generate_roast():
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[
+                "Give a short, funny but kind roast of this outfit. Include an outfit score from 0 to 10 "
+                "and briefly explain the score. Focus only on visible details.",
+                types.Part.from_bytes(data=image_data, mime_type=mime_type),
+            ],
+            config=types.GenerateContentConfig(temperature=0.7),
+        )
+        if not response.text:
+            raise ValueError("Gemini returned an empty fit check response.")
+        return response.text
 
-    # Send the request to the Gemini API
-    response = await client.models.generate_content(**payload)
-
-    return response.text
+    return await asyncio.to_thread(generate_roast)

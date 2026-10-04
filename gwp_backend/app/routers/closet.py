@@ -1,8 +1,8 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
-from app.data.models import ItemCreate, OutfitCreate
+from app.data.models import ItemCreate, ItemRecord, ItemUploadRequest, ItemUploadResponse, OutfitCreate
 from app.services import closet_service
 
 router = APIRouter(
@@ -11,6 +11,13 @@ router = APIRouter(
 )
 
 # --- ITEM ENDPOINTS ---
+
+@router.post("/items/upload-url", response_model=ItemUploadResponse)
+async def create_item_upload_url(upload: ItemUploadRequest):
+    try:
+        return await closet_service.create_item_upload(upload)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 # 1. GET ALL ITEMS
 @router.get("/items")
@@ -26,17 +33,14 @@ async def get_items():
     }
 
 # 2. ADD ITEM TO CLOSET
-@router.post("/items")
+@router.post("/items", response_model=ItemRecord)
 async def add_item(item: ItemCreate):
-    """
-    Skeleton endpoint for adding a closet item.
-    """
-    item_id = await closet_service.add_item(item)
-    return {
-        "status": "success",
-        "message": f"Skeleton endpoint: Item {item_id} added successfully.",
-        "item_id": str(item_id)
-    }
+    try:
+        return await closet_service.add_item(item)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 # 3. DELETE ITEM FROM CLOSET
 @router.delete("/items/{item_id}")

@@ -18,13 +18,18 @@ class Settings:
 
 @lru_cache
 def get_settings() -> Settings:
-    missing = [name for name in ("SUPABASE_URL", "SUPABASE_KEY") if not os.getenv(name)]
+    supabase_key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    missing = []
+    if not os.getenv("SUPABASE_URL"):
+        missing.append("SUPABASE_URL")
+    if not supabase_key:
+        missing.append("SUPABASE_KEY or SUPABASE_SERVICE_ROLE_KEY")
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
     return Settings(
         url=os.environ["SUPABASE_URL"].rstrip("/"),
-        key=os.environ["SUPABASE_KEY"],
-        bucket=os.getenv("SUPABASE_STORAGE_BUCKET", "closet-images"),
+        key=supabase_key,
+        bucket=os.getenv("SUPABASE_STORAGE_BUCKET", "closet-items"),
     )
 
 

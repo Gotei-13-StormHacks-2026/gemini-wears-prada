@@ -6,6 +6,9 @@ export type WardrobeItemData = {
 	name: string
 	category: Category
 	imageUrl: string
+	description?: string
+	primaryColor?: string
+	secondaryColor?: string | null
 	notes?: string
 }
 
@@ -15,6 +18,25 @@ export type ItemCreate = {
 	image_ref: string
 	name?: string | null
 	notes?: string | null
+	category?: ItemCategory | null
+}
+
+export type ItemUploadRequest = {
+	content_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+}
+
+export type ItemUploadResponse = {
+	image_ref: string
+	token: string
+}
+
+export type RoastImageRequest = {
+	image_ref: string
+}
+
+export type RoastImageResponse = {
+	status: 'success'
+	roast_text: string
 }
 
 export type ItemMetadata = {

@@ -1,100 +1,182 @@
+import logging
+import random
 from uuid import UUID, uuid4
 
-from app.data.models import ItemCreate, ItemRecord, OutfitCreate, OutfitRecord
+from app.data.models import (
+    ItemCreate,
+    ItemRecord,
+    ItemUploadRequest,
+    ItemUploadResponse,
+    OutfitCreate,
+    OutfitRecord,
+)
 from app.data.supabase_client import get_client, get_settings
-from app.services.extraction import extract_outfit_as_stickers 
-from app.services.outfit_algo import outfit_algo 
+from app.services.roast_service import analyze_item_image
+
+ITEMS = "items"
+OUTFITS = "outfits"
+OUTFIT_ITEMS = "outfit_items"
+logger = logging.getLogger(__name__)
+
+_IMAGE_EXTENSIONS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+
+
+def _response_data(response):
+    return getattr(response, "data", response)
+
+
+def _signed_url_from_response(response) -> str | None:
+    data = _response_data(response)
+    if isinstance(data, dict):
+        return data.get("signedURL") or data.get("signedUrl")
+    return getattr(data, "signed_url", None) or getattr(data, "signedURL", None)
+
+
+def _to_item(record: dict, signed_urls: dict[str, str]) -> ItemRecord:
+    return ItemRecord.model_validate(
+        {**record, "image_url": signed_urls.get(record["image_ref"])}
+    )
+
+
+async def _signed_urls(image_refs: list[str]) -> dict[str, str]:
+    settings = get_settings()
+    client = await get_client()
+    storage = client.storage.from_(settings.bucket)
+    signed_urls: dict[str, str] = {}
+    for image_ref in dict.fromkeys(image_refs):
+        url = _signed_url_from_response(await storage.create_signed_url(image_ref, 3600))
+        if url:
+            signed_urls[image_ref] = url
+    return signed_urls
+
+
+async def create_item_upload(item: ItemUploadRequest) -> ItemUploadResponse:
+    settings = get_settings()
+    client = await get_client()
+    image_ref = f"{uuid4()}.{_IMAGE_EXTENSIONS[item.content_type]}"
+    response = await client.storage.from_(settings.bucket).create_signed_upload_url(image_ref)
+    data = _response_data(response)
+    token = data.get("token") if isinstance(data, dict) else getattr(data, "token", None)
+    if not token:
+        raise RuntimeError("Supabase did not return a signed upload token.")
+    return ItemUploadResponse(image_ref=image_ref, token=token)
+
 
 async def get_items() -> list[ItemRecord]:
-    """Retrieve all item records from the database by email or user ID (if applicable)"""
     client = await get_client()
     response = await client.table(ITEMS).select("*").order("created_at", desc=True).execute()
-    rows = response.data or []
-    urls = await _signed_urls([r["image_ref"] for r in rows])
-    return [_to_item(r, urls) for r in rows]
+    records = response.data or []
+    urls = await _signed_urls([record["image_ref"] for record in records])
+    return [_to_item(record, urls) for record in records]
 
-async def add_item(item: ItemCreate) -> UUID:
-    """Given an ItemCreate object, extract outfit from image, store it in the database, and return its UUID"""
-    record = await extract_outfit_as_stickers(item) # calls extract_outfit_as_stickers which returns ItemRecord object with item_id populated
+
+async def add_item(item: ItemCreate) -> ItemRecord:
     client = await get_client()
-    await client.table(ITEMS).insert(record.model_dump(mode="json", exclude={"image_url"})).execute()
-    return record.item_id
-    return uuid4()
+    settings = get_settings()
+    mime_type = next(
+        (mime for mime, extension in _IMAGE_EXTENSIONS.items()
+         if item.image_ref.lower().endswith(f".{extension}")),
+        None,
+    )
+    if mime_type is None:
+        raise ValueError("The uploaded image has an unsupported file type.")
+
+    image_data = await client.storage.from_(settings.bucket).download(item.image_ref)
+    metadata = await analyze_item_image(image_data, mime_type)
+    if item.category is not None:
+        metadata = metadata.model_copy(update={"category": item.category})
+
+    record = ItemRecord(
+        item_id=uuid4(),
+        image_ref=item.image_ref,
+        name=item.name,
+        notes=item.notes,
+        **metadata.model_dump(),
+    )
+    payload = record.model_dump(mode="json", exclude={"image_url"})
+    response = await client.table(ITEMS).insert(payload).execute()
+    saved = (response.data or [payload])[0]
+    urls = await _signed_urls([item.image_ref])
+    return _to_item(saved, urls)
+
 
 async def delete_item(item_id: UUID) -> None:
-    """Delete an item record by its UUID"""
     client = await get_client()
-
+    settings = get_settings()
     found = await client.table(ITEMS).select("image_ref").eq("item_id", str(item_id)).execute()
     if not found.data:
         return
+
     image_ref = found.data[0]["image_ref"]
-
     links = await client.table(OUTFIT_ITEMS).select("outfit_id").eq("item_id", str(item_id)).execute()
-    affected = {row["outfit_id"] for row in links.data or []}
-
-    # outfit_items rows cascade-delete with the item (see schema.sql).
+    affected_outfits = {row["outfit_id"] for row in links.data or []}
     await client.table(ITEMS).delete().eq("item_id", str(item_id)).execute()
 
-    # An OutfitRecord needs at least one item, so remove outfits that are now empty.
-    for outfit_id in affected:
+    for outfit_id in affected_outfits:
         remaining = await client.table(OUTFIT_ITEMS).select("item_id").eq("outfit_id", outfit_id).limit(1).execute()
         if not remaining.data:
             await client.table(OUTFITS).delete().eq("outfit_id", outfit_id).execute()
 
-    # Best-effort image cleanup; the DB row is already gone.
     try:
-        await client.storage.from_(get_settings().bucket).remove([image_ref])
+        await client.storage.from_(settings.bucket).remove([image_ref])
     except Exception:
         logger.exception("Could not remove storage object %s", image_ref)
 
+
 async def get_outfits() -> list[OutfitRecord]:
-    """Retrieve all outfit records from the database by email or user ID (if applicable)"""
     client = await get_client()
-    response = (
-        await client.table(OUTFITS)
-        .select("*, outfit_items(position, items(*))")
+    response = await (
+        client.table(OUTFITS)
+        .select("*, outfit_items(items(*))")
         .order("created_at", desc=True)
         .execute()
     )
     outfits = response.data or []
-
-    all_refs = [
-        link["items"]["image_ref"]
+    item_records = [
+        link["items"]
         for outfit in outfits
-        for link in outfit["outfit_items"]
+        for link in outfit.get("outfit_items", [])
         if link.get("items")
     ]
-    urls = await _signed_urls(all_refs)
+    urls = await _signed_urls([record["image_ref"] for record in item_records])
 
     records: list[OutfitRecord] = []
     for outfit in outfits:
-        links = sorted(outfit["outfit_items"], key=lambda link: link["position"])
-        items = [_to_item(link["items"], urls) for link in links if link.get("items")]
-        if not items:
-            continue  # orphaned outfit; can't satisfy OutfitRecord.items min_length=1
-        records.append(
-            OutfitRecord.model_validate(
-                {
-                    "outfit_id": outfit["outfit_id"],
-                    "name": outfit["name"],
-                    "items": items,
-                    "overall_rating": outfit["overall_rating"],
-                    "is_favorite": outfit["is_favorite"],
-                    "created_at": outfit["created_at"],
-                }
+        items = [
+            _to_item(link["items"], urls)
+            for link in outfit.get("outfit_items", [])
+            if link.get("items")
+        ]
+        if items:
+            records.append(
+                OutfitRecord.model_validate(
+                    {
+                        "outfit_id": outfit["outfit_id"],
+                        "name": outfit.get("name"),
+                        "items": items,
+                        "overall_rating": outfit.get("overall_rating"),
+                        "is_favorite": outfit.get("is_favorite", False),
+                        "created_at": outfit["created_at"],
+                    }
+                )
             )
-        )
     return records
 
+
 async def _persist_outfit(outfit: OutfitCreate) -> UUID:
-    item_ids = list(dict.fromkeys(outfit.item_ids))  # de-dupe, keep order
+    item_ids = list(dict.fromkeys(outfit.item_ids))
     if not item_ids:
-        raise ValueError("An outfit needs at least one item")
+        raise ValueError("An outfit needs at least one item.")
 
     client = await get_client()
-    found = await client.table(ITEMS).select("item_id").in_("item_id", [str(i) for i in item_ids]).execute()
-    missing = set(map(str, item_ids)) - {row["item_id"] for row in found.data or []}
+    found = await client.table(ITEMS).select("item_id").in_("item_id", [str(item_id) for item_id in item_ids]).execute()
+    found_ids = {row["item_id"] for row in found.data or []}
+    missing = set(map(str, item_ids)) - found_ids
     if missing:
         raise LookupError(f"Unknown item ids: {', '.join(sorted(missing))}")
 
@@ -103,32 +185,31 @@ async def _persist_outfit(outfit: OutfitCreate) -> UUID:
     try:
         await client.table(OUTFIT_ITEMS).insert(
             [
-                {"outfit_id": outfit_id, "item_id": str(item_id), "position": position}
-                for position, item_id in enumerate(item_ids)
+                {"outfit_id": outfit_id, "item_id": str(item_id)}
+                for item_id in item_ids
             ]
         ).execute()
     except Exception:
-        # No multi-statement transactions via PostgREST, so undo manually.
         await client.table(OUTFITS).delete().eq("outfit_id", outfit_id).execute()
         raise
     return UUID(outfit_id)
 
+
 async def create_outfit(outfit: OutfitCreate) -> UUID:
-    """Create an outfit from item_ids; an empty list falls back to automatic selection."""
     if not outfit.item_ids:
-        draft = await outfit_algo(await get_items())
-        outfit = OutfitCreate(name=outfit.name or draft.name, item_ids=draft.item_ids)
+        items = await get_items()
+        if not items:
+            raise ValueError("Add items to the closet before generating an outfit.")
+        category_order = ("top", "bottom", "shoes", "outerwear", "accessory")
+        selected = []
+        for category in category_order:
+            pool = [item for item in items if item.category == category]
+            if pool:
+                selected.append(random.choice(pool).item_id)
+        outfit = OutfitCreate(name=outfit.name, item_ids=selected)
     return await _persist_outfit(outfit)
 
 
-async def generate_outfit() -> UUID:
-    """Generate a new combination from the closet via outfit_algo and persist it."""
-    items = await get_items()
-    if not items:
-        raise ValueError("Add some items to the closet before generating an outfit")
-    return await _persist_outfit(await outfit_algo(items))
-
 async def delete_outfit(outfit_id: UUID) -> None:
-    """Delete an outfit; its outfit_items rows cascade."""
     client = await get_client()
     await client.table(OUTFITS).delete().eq("outfit_id", str(outfit_id)).execute()
