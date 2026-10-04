@@ -62,6 +62,9 @@ function Homepage() {
         body: JSON.stringify({ image_ref: ticket.image_ref }),
       })
       if (!roastResponse.ok) {
+        if (roastResponse.status === 503) {
+          throw new Error('Model is currently experiencing high demand. Please try again later.')
+        }
         const body = await roastResponse.json().catch(() => null)
         throw new Error(typeof body?.detail === 'string' ? body.detail : 'Could not analyze this fit check.')
       }
@@ -69,7 +72,11 @@ function Homepage() {
       const result = (await roastResponse.json()) as RoastImageResponse
       setRoastText(result.roast_text)
     } catch (error) {
-      setFitCheckError(error instanceof Error ? error.message : 'Could not complete this fit check.')
+      if (error instanceof Error && error.message.includes('Model is currently experiencing high demand')) {
+        setFitCheckError('The AI model is currently experiencing high demand. Please try again later.')
+      } else {
+        setFitCheckError(error instanceof Error ? error.message : 'Could not complete this fit check.')
+      }
     } finally {
       setFitCheckStatus(null)
     }
