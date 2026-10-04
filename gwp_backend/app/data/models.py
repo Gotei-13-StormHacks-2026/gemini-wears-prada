@@ -24,6 +24,7 @@ class RoastImageRequest(BaseModel):
 
 class ItemCreate(BaseModel):
     """Input for adding an item; image_ref identifies its Supabase Storage object."""
+    """Only the image_ref is required; other fields are optional and can be filled in later."""
 
     image_ref: str = Field(min_length=1)
     name: str | None = None
@@ -34,6 +35,7 @@ class ItemCreate(BaseModel):
 class ItemMetadata(BaseModel):
     """Clothing attributes returned by image analysis."""
 
+    name: str 
     category: ItemCategory
     primary_color: str = Field(min_length=1)
     secondary_color: str | None = None
