@@ -62,7 +62,7 @@ function Homepage() {
         body: JSON.stringify({ image_ref: ticket.image_ref }),
       })
       if (!roastResponse.ok) {
-        if (roastResponse.status === 503) {
+        if (roastResponse.status === 503 || roastResponse.status === 502) {
           throw new Error('Model is currently experiencing high demand. Please try again later.')
         }
         const body = await roastResponse.json().catch(() => null)
