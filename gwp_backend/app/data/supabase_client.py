@@ -8,13 +8,11 @@ from supabase import AsyncClient, acreate_client
 
 load_dotenv()
 
-
 @dataclass(frozen=True)
 class Settings:
     url: str
     key: str
     bucket: str
-
 
 @lru_cache
 def get_settings() -> Settings:
