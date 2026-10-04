@@ -199,6 +199,12 @@ export default function Wardrobe() {
           .json()
           .catch(() => null)
 
+        if (itemResponse.status === 502 || itemResponse.status === 503) {
+          throw new Error(
+            'The AI model is currently experiencing high demand. Please try again later.',
+          )
+        }
+
         throw new Error(
           typeof body?.detail === 'string'
             ? body.detail
