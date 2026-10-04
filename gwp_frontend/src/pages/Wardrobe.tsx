@@ -2,15 +2,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import WardrobeItem from '../components/WardrobeItem'
-import { supabase } from '../lib/supabase'
+import AddPiece from '../components/AddPiece'
+// import { supabase } from '../lib/supabase'
 import {
-  CATEGORIES,
+  // CATEGORIES,
   type Category,
-  type ItemCategory,
-  type ItemCreate,
+  // type ItemCategory,
+  // type ItemCreate,
   type ItemRecord,
-  type ItemUploadRequest,
-  type ItemUploadResponse,
+  // type ItemUploadRequest,
+  // type ItemUploadResponse,
   type WardrobeItemData,
 } from '../lib/types'
 
@@ -20,14 +21,14 @@ const DRESS_CODES = ['Casual', 'Smart Casual', 'Business', 'Formal', 'Athletic']
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
-const STORAGE_BUCKET = 'closet-items'
+// const STORAGE_BUCKET = 'closet-items'
 
-const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-]
+// const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
+//   'image/jpeg',
+//   'image/png',
+//   'image/webp',
+//   'image/gif',
+// ]
 
 const pickRandom = <T,>(arr: T[]) =>
   arr[Math.floor(Math.random() * arr.length)]
@@ -52,12 +53,12 @@ export default function Wardrobe() {
   const [showAdd, setShowAdd] = useState(false)
 
   // Add-piece form
-  const [name, setName] = useState('')
-  const [category, setCategory] = useState<Category>('Top')
-  const [notes, setNotes] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
+  // const [name, setName] = useState('')
+  // const [category, setCategory] = useState<Category>('Top')
+  // const [notes, setNotes] = useState('')
+  // const [file, setFile] = useState<File | null>(null)
+  // const [isSaving, setIsSaving] = useState(false)
+  // const [uploadError, setUploadError] = useState<string | null>(null)
   const [itemsError, setItemsError] = useState<string | null>(null)
 
   // Outfit generator
@@ -100,113 +101,6 @@ export default function Wardrobe() {
       cancelled = true
     }
   }, [])
-
-  const addPiece = async () => {
-    // Image is the only required field.
-    if (!file || isSaving) return
-
-    setIsSaving(true)
-    setUploadError(null)
-
-    try {
-      if (
-        !SUPPORTED_IMAGE_TYPES.includes(
-          file.type as ItemUploadRequest['content_type'],
-        )
-      ) {
-        throw new Error('Choose a JPEG, PNG, WebP, or GIF image.')
-      }
-
-      if (!supabase) {
-        throw new Error(
-          'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment.',
-        )
-      }
-
-      const uploadRequest: ItemUploadRequest = {
-        content_type: file.type as ItemUploadRequest['content_type'],
-      }
-
-      const uploadUrlResponse = await fetch(
-        `${API_BASE_URL}/api/closet/items/upload-url`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(uploadRequest),
-        },
-      )
-
-      if (!uploadUrlResponse.ok) {
-        const body = await uploadUrlResponse.json().catch(() => null)
-
-        throw new Error(
-          typeof body?.detail === 'string'
-            ? body.detail
-            : 'Could not prepare the image upload.',
-        )
-      }
-
-      const upload =
-        (await uploadUrlResponse.json()) as ItemUploadResponse
-
-      const { error: storageError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .uploadToSignedUrl(
-          upload.image_ref,
-          upload.token,
-          file,
-          { contentType: file.type },
-        )
-
-      if (storageError) throw storageError
-
-      const itemResponse = await fetch(
-        `${API_BASE_URL}/api/closet/items`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            image_ref: upload.image_ref,
-            name: name.trim() || undefined,
-            notes: notes.trim() || undefined,
-            category: category.toLowerCase() as ItemCategory,
-          } satisfies ItemCreate),
-        },
-      )
-
-      if (!itemResponse.ok) {
-        const body = await itemResponse.json().catch(() => null)
-
-        throw new Error(
-          typeof body?.detail === 'string'
-            ? body.detail
-            : 'The image uploaded, but the item could not be created.',
-        )
-      }
-
-      const createdItem = (await itemResponse.json()) as ItemRecord
-      const wardrobeItem = toWardrobeItem(createdItem)
-
-      if (!wardrobeItem.imageUrl) {
-        wardrobeItem.imageUrl = URL.createObjectURL(file)
-      }
-
-      setItems((previous) => [wardrobeItem, ...previous])
-
-      setName('')
-      setNotes('')
-      setFile(null)
-      setShowAdd(false)
-    } catch (error) {
-      setUploadError(
-        error instanceof Error
-          ? error.message
-          : 'Could not add this item.',
-      )
-    } finally {
-      setIsSaving(false)
-    }
-  }
 
   const updatePiece = (updated: WardrobeItemData) => {
     setItems((prev) =>
@@ -283,101 +177,7 @@ export default function Wardrobe() {
       )}
 
       {/* Add item */}
-      {showAdd && (
-        <section className="panel add-panel">
-          <div className="panel-heading">
-            <div>
-              <span className="panel-eyebrow">NEW ITEM</span>
-              <h2>Add to your wardrobe</h2>
-              <p>
-                Upload a photo and we'll handle the rest.
-                Everything else is optional.
-              </p>
-            </div>
-          </div>
-
-          <div className="add-form">
-            <label className="upload-box">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={(e) =>
-                  setFile(e.target.files?.[0] ?? null)
-                }
-              />
-
-              <span className="upload-icon">
-                {file ? '✓' : '+'}
-              </span>
-
-              <span className="upload-title">
-                {file ? file.name : 'Choose an image'}
-              </span>
-
-              <span className="upload-subtitle">
-                {file
-                  ? 'Image ready to upload'
-                  : 'JPEG, PNG, WebP or GIF'}
-              </span>
-            </label>
-
-            <div className="optional-fields">
-              <label className="field">
-                <span>Name <em>optional</em></span>
-                <input
-                  placeholder="e.g. Cerulean sweater"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-
-              <label className="field">
-                <span>Category <em>optional</em></span>
-                <select
-                  value={category}
-                  onChange={(e) =>
-                    setCategory(e.target.value as Category)
-                  }
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field field-full">
-                <span>Notes <em>optional</em></span>
-                <textarea
-                  placeholder="Brand, fit, where it works..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="panel-footer">
-            <span className="required-note">
-              * Only the image is required
-            </span>
-
-            <button
-              className="primary-button"
-              onClick={addPiece}
-              disabled={!file || isSaving}
-            >
-              {isSaving ? 'Analyzing...' : 'Add to Wardrobe'}
-            </button>
-          </div>
-
-          {uploadError && (
-            <div className="error-message" role="alert">
-              {uploadError}
-            </div>
-          )}
-        </section>
-      )}
+      {showAdd && <AddPiece isSaving={false} onAdd={() => Promise.resolve()} />}
 
       {/* Outfit generator */}
       <section className="panel generator-panel">
