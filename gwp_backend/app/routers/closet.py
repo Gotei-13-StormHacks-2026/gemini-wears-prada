@@ -37,8 +37,10 @@ async def get_items():
 async def add_item(item: ItemCreate):
     try:
         return await closet_service.add_item(item)
+    except ServerError as error:
+        raise HTTPException(status_code=502, detail="The AI labeling service is temporarily unavailable.") from error
     except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        raise HTTPException(status_code=503, detail="The AI labeling service is temporarily unavailable.") from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
