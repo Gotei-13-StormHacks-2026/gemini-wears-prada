@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from app.data.models import ItemCreate, ItemRecord, OutfitCreate, OutfitRecord
 from app.data.supabase_client import get_client, get_settings
 from app.services.extraction import extract_outfit_as_stickers 
-from app.services.outfit_algo import outfit_algo 
+from app.services.outfit_algorithm import outfit_algo 
 
 async def get_items() -> list[ItemRecord]:
     """Retrieve all item records from the database by email or user ID (if applicable)"""
