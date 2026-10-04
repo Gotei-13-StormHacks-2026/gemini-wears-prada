@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import WardrobeItem, {
-  CATEGORIES,
-  type Category,
-  type WardrobeItemData,
-} from '../components/WardrobeItem'
+import WardrobeItem from '../components/WardrobeItem'
+import { CATEGORIES, type Category, type WardrobeItemData } from '../lib/types'
 
 const SEASONS = ['Spring', 'Summer', 'Fall', 'Winter']
 const DRESS_CODES = ['Casual', 'Smart Casual', 'Business', 'Formal', 'Athletic']
