@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { ItemUploadRequest, ItemUploadResponse, RoastImageResponse } from '../lib/types'
+import { speak } from '../lib/tts'
 import { getCurrentMonth } from '../lib/utils'
 
 import logo from '../assets/gwp_logo_best.png'
@@ -71,6 +72,7 @@ function Homepage() {
 
       const result = (await roastResponse.json()) as RoastImageResponse
       setRoastText(result.roast_text)
+      speak(result.roast_text).catch((error) => console.error('Could not read roast aloud', error))
     } catch (error) {
       if (error instanceof Error && error.message.includes('Model is currently experiencing high demand')) {
         setFitCheckError('The AI model is currently experiencing high demand. Please try again later.')
