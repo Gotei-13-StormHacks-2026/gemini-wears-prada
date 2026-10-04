@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from app.models import ItemCreate, ItemRecord, OutfitCreate, OutfitRecord
+from app.data.models import ItemCreate, ItemRecord, OutfitCreate, OutfitRecord
 
 
 async def get_items() -> list[ItemRecord]:
