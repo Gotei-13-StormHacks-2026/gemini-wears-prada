@@ -120,7 +120,6 @@ async def create_outfit(outfit: OutfitCreate) -> UUID:
         outfit = OutfitCreate(name=outfit.name or draft.name, item_ids=draft.item_ids)
     return await _persist_outfit(outfit)
 
-
 async def generate_outfit() -> UUID:
     """Generate a new combination from the closet via outfit_algo and persist it."""
     items = await get_items()
