@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 
 from app.data.models import ItemRecord, OutfitCreate
-from app.services.outfit_algo import (
+from app.services.outfit_algorithm import (
     DRESS_CODE_ALIASES,
     DRESS_RANGES,
     SEASON_ALIASES,
@@ -24,25 +24,26 @@ from app.services.outfit_algo import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def item(
     category: str,
     *,
     name: str | None = None,
-    description: str = "",
-    primary_color: str | None = "black",
+    description: str = "test item",
+    primary_color: str = "black",
     secondary_color: str | None = None,
     notes: str | None = None,
     favorite: bool = False,
 ) -> ItemRecord:
+    item_id = uuid4()
     return ItemRecord(
-        item_id=uuid4(),
+        item_id=item_id,
+        image_ref=f"stickers/{item_id}.png",
         category=category,
         name=name or category.title(),
         notes=notes,
         primary_color=primary_color,
         secondary_color=secondary_color,
-        description=description,
+        description=description or "test item",
         is_favorite=favorite,
     )
 
