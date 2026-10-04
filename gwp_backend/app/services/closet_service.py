@@ -11,7 +11,7 @@ from app.data.models import (
 )
 from app.data.supabase_client import get_client, get_settings
 from app.services.extraction import extract_outfit_as_stickers
-from app.services.outfit_algo import outfit_algo
+from app.services.outfit_algorithm import outfit_algo
 
 ITEMS = "items"
 OUTFITS = "outfits"

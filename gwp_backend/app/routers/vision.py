@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 from app.data.models import RoastImageRequest
-from app.services.roast_service import generate_roast_for_image
+from app.services.agent_service import generate_roast_for_image
 
 logger = logging.getLogger(__name__)
 
