@@ -5,13 +5,15 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 
-ItemCategory = Literal["top", "bottom", "shoes", "accessory"]
+ItemCategory = Literal["top", "bottom", "outerwear", "shoes", "accessory"]
 
 
 class ItemCreate(BaseModel):
     """Input for adding an item; image_ref identifies its Supabase Storage object."""
 
     image_ref: str = Field(min_length=1)
+    name: str | None = None
+    notes: str | None = None
 
 
 class ItemMetadata(BaseModel):
@@ -26,6 +28,9 @@ class ItemMetadata(BaseModel):
 class ItemRecord(ItemMetadata):
     item_id: UUID = Field(default_factory=uuid4)
     image_ref: str = Field(min_length=1)
+    image_url: str | None = None
+    name: str | None = None
+    notes: str | None = None
     is_favorite: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

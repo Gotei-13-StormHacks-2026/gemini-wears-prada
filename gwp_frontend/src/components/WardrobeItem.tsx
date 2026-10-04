@@ -1,15 +1,5 @@
 import { useState } from 'react'
-
-export const CATEGORIES = ['Top', 'Bottom', 'Outerwear', 'Shoes', 'Accessory'] as const
-export type Category = (typeof CATEGORIES)[number]
-
-export type WardrobeItemData = {
-  id: string
-  name: string
-  category: Category
-  imageUrl: string
-  notes?: string
-}
+import { CATEGORIES, type Category, type WardrobeItemData } from '../lib/types'
 
 type Props = {
   item: WardrobeItemData
