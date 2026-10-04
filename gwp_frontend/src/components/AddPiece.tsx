@@ -12,8 +12,8 @@ type AddPieceProps = {
 };
 
 const CATEGORIES = [
-  "shirt",
-  "pants",
+  "top",
+  "bottom",
   "shorts",
   "shoes",
   "outerwear",
