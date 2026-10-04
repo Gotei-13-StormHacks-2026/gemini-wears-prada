@@ -35,3 +35,21 @@ npm run dev
 Open the local URL printed by Vite. The backend allows both `localhost:5173` and `127.0.0.1:5173` during local development.
 
 Never commit `gwp_backend/.env.local`; it is ignored by Git. Share `gwp_backend/env.example` with teammates, not the populated local file.
+
+## Running the Development Scripts
+
+### Windows PowerShell
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+./scripts/setup.ps1
+./scripts/run.ps1
+```
+
+### Linux/macOS
+
+```bash
+chmod +x scripts/setup.sh scripts/dev.sh
+./scripts/setup.sh
+./scripts/run.sh
+```
