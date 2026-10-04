@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.models import ItemCreate, OutfitCreate
+from app.data.models import ItemCreate, OutfitCreate
 from app.services import closet_service
 
 router = APIRouter(
