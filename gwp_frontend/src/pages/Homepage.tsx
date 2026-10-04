@@ -63,8 +63,8 @@ function Homepage() {
         body: JSON.stringify({ image_ref: ticket.image_ref }),
       })
       if (!roastResponse.ok) {
-        if (roastResponse.status === 503) {
-          throw new Error('Model is currently experiencing high demand. Please try again later.')
+        if (roastResponse.status === 503 || roastResponse.status === 502) {
+          throw new Error('The AI model is currently experiencing high demand. Please try again later.')
         }
         const body = await roastResponse.json().catch(() => null)
         throw new Error(typeof body?.detail === 'string' ? body.detail : 'Could not analyze this fit check.')

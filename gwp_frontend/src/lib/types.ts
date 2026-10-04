@@ -40,6 +40,7 @@ export type RoastImageResponse = {
 }
 
 export type ItemMetadata = {
+	name: string
 	category: ItemCategory
 	primary_color: string
 	secondary_color: string | null

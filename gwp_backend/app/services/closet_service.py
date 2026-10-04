@@ -97,6 +97,10 @@ async def add_item(item: ItemCreate) -> ItemRecord:
         raise ValueError("The uploaded image has an unsupported file type.")
 
     record = await extract_outfit_as_stickers(item)
+
+    name = getattr(item, "name", None)
+    if name is not None:  # an explicit name from the user beats the model's guess
+        record = record.model_copy(update={"name": name})
     category = getattr(item, "category", None)
     if category is not None:  # an explicit category from the user beats the model's guess
         record = record.model_copy(update={"category": category})

@@ -38,6 +38,8 @@ async def add_item(item: ItemCreate):
     try:
         return await closet_service.add_item(item)
     except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

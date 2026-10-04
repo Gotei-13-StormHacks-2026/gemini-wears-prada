@@ -3,15 +3,15 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import WardrobeItem from '../components/WardrobeItem'
 import AddPiece from '../components/AddPiece'
-// import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import {
   // CATEGORIES,
   type Category,
-  // type ItemCategory,
-  // type ItemCreate,
+  type ItemCategory,
+  type ItemCreate,
   type ItemRecord,
-  // type ItemUploadRequest,
-  // type ItemUploadResponse,
+  type ItemUploadRequest,
+  type ItemUploadResponse,
   type WardrobeItemData,
 } from '../lib/types'
 
@@ -21,21 +21,21 @@ const DRESS_CODES = ['Casual', 'Smart Casual', 'Business', 'Formal', 'Athletic']
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
-// const STORAGE_BUCKET = 'closet-items'
+const STORAGE_BUCKET = 'closet-items'
 
-// const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
-//   'image/jpeg',
-//   'image/png',
-//   'image/webp',
-//   'image/gif',
-// ]
+const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]
 
 const pickRandom = <T,>(arr: T[]) =>
   arr[Math.floor(Math.random() * arr.length)]
 
 const toWardrobeItem = (item: ItemRecord): WardrobeItemData => ({
   id: item.item_id,
-  name: item.name ?? item.description,
+  name: item.name,
   category: (
     item.category.charAt(0).toUpperCase() + item.category.slice(1)
   ) as Category,
@@ -53,12 +53,8 @@ export default function Wardrobe() {
   const [showAdd, setShowAdd] = useState(false)
 
   // Add-piece form
-  // const [name, setName] = useState('')
-  // const [category, setCategory] = useState<Category>('Top')
-  // const [notes, setNotes] = useState('')
-  // const [file, setFile] = useState<File | null>(null)
-  // const [isSaving, setIsSaving] = useState(false)
-  // const [uploadError, setUploadError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [itemsError, setItemsError] = useState<string | null>(null)
 
   // Outfit generator
@@ -101,6 +97,148 @@ export default function Wardrobe() {
       cancelled = true
     }
   }, [])
+
+  const addPiece = async (data: {
+    file: File
+    name?: string
+    notes?: string
+    category?: string
+  }) => {
+    if (isSaving) return
+
+    setIsSaving(true)
+    setUploadError(null)
+
+    try {
+      const { file, name, notes, category } = data
+
+      if (
+        !SUPPORTED_IMAGE_TYPES.includes(
+          file.type as ItemUploadRequest['content_type'],
+        )
+      ) {
+        throw new Error(
+          'Choose a JPEG, PNG, WebP, or GIF image.',
+        )
+      }
+      
+      if (!supabase) {
+        throw new Error(
+          'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment.',
+        )
+      }
+
+      // 1. Ask the backend for a signed upload URL.
+      const uploadRequest: ItemUploadRequest = {
+        content_type:
+          file.type as ItemUploadRequest['content_type'],
+      }
+
+      const uploadUrlResponse = await fetch(
+        `${API_BASE_URL}/api/closet/items/upload-url`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(uploadRequest),
+        },
+      )
+
+      if (!uploadUrlResponse.ok) {
+        const body = await uploadUrlResponse
+          .json()
+          .catch(() => null)
+
+        throw new Error(
+          typeof body?.detail === 'string'
+            ? body.detail
+            : 'Could not prepare the image upload.',
+        )
+      }
+
+      const upload =
+        (await uploadUrlResponse.json()) as ItemUploadResponse
+
+      // 2. Upload the actual image to Supabase Storage.
+      const { error: storageError } =
+        await supabase.storage
+          .from(STORAGE_BUCKET)
+          .uploadToSignedUrl(
+            upload.image_ref,
+            upload.token,
+            file,
+            {
+              contentType: file.type,
+            },
+          )
+
+      if (storageError) {
+        throw storageError
+      }
+
+      // 3. Tell the backend to create the wardrobe item.
+      const itemResponse = await fetch(
+        `${API_BASE_URL}/api/closet/items`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            image_ref: upload.image_ref,
+            name: name || undefined,
+            notes: notes || undefined,
+            category: category ? category.toLowerCase() as ItemCategory : undefined,
+          } satisfies ItemCreate),
+        },
+      )
+
+      if (!itemResponse.ok) {
+        const body = await itemResponse
+          .json()
+          .catch(() => null)
+
+        if (itemResponse.status === 502 || itemResponse.status === 503) {
+          throw new Error(
+            'The AI model is currently experiencing high demand. Please try again later.',
+          )
+        }
+
+        throw new Error(
+          typeof body?.detail === 'string'
+            ? body.detail
+            : 'The image uploaded, but the item could not be created.',
+        )
+      }
+
+      // 4. Add the newly-created item to the UI.
+      const createdItem =
+        (await itemResponse.json()) as ItemRecord
+
+      const wardrobeItem = toWardrobeItem(createdItem)
+
+      if (!wardrobeItem.imageUrl) {
+        wardrobeItem.imageUrl =
+          URL.createObjectURL(file)
+      }
+
+      setItems((previous) => [
+        wardrobeItem,
+        ...previous,
+      ])
+
+      setShowAdd(false)
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : 'Could not add this item.',
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const updatePiece = (updated: WardrobeItemData) => {
     setItems((prev) =>
@@ -161,9 +299,8 @@ export default function Wardrobe() {
         </div>
 
         <button
-          className={`header-button add-button ${
-            showAdd ? 'active' : ''
-          }`}
+          className={`header-button add-button ${showAdd ? 'active' : ''
+            }`}
           onClick={() => setShowAdd((value) => !value)}
         >
           {showAdd ? 'Cancel' : '+ Add Piece'}
@@ -177,7 +314,17 @@ export default function Wardrobe() {
       )}
 
       {/* Add item */}
-      {showAdd && <AddPiece isSaving={false} onAdd={() => Promise.resolve()} />}
+      {showAdd && (
+        <>
+          <AddPiece isSaving={isSaving} onAdd={addPiece}/>
+
+          {uploadError && (
+            <div className="error-message" role="alert">
+              {uploadError}
+            </div>
+          )}
+        </>
+      )}
 
       {/* Outfit generator */}
       <section className="panel generator-panel">

@@ -18,6 +18,7 @@ SYSTEM_PROMPT = f"""You label single clothing items for a wardrobe app. The imag
 cut out and placed on a neutral gray background (the gray is not part of the item).
 
 Rules:
+- name: a short, human-readable name for the item, e.g. "red plaid flannel shirt" or "black leather boots".
 - category: choose the closest of top, bottom, outerwear, shoes, accessory.
 - primary_color: the dominant colour of the item itself, chosen from: {", ".join(COLOR_VOCAB)}.
 - secondary_color: the next most visible colour from the same list, or null if the item is essentially one colour.
@@ -62,6 +63,8 @@ def _clean(meta: ItemMetadata) -> ItemMetadata:
     """Normalise casing/whitespace so downstream matching is simple."""
     return meta.model_copy(
         update={
+            "name": meta.name.strip().lower(),
+            "category": meta.category.strip().lower(),
             "primary_color": meta.primary_color.strip().lower(),
             "secondary_color": meta.secondary_color.strip().lower() if meta.secondary_color else None,
             "description": meta.description.strip(),
