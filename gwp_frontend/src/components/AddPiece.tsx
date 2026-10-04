@@ -54,7 +54,7 @@ export default function AddPiece({
   };
 
   const handleSubmit = async () => {
-    if (!file || isSaving) return;
+    if (!file || isSaving || !name) return; // for now, require a name for the piece
 
     await onAdd({
       file,
