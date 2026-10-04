@@ -6,9 +6,8 @@ from PIL import Image
 from pydantic import ValidationError
 
 from app.data.models import ItemMetadata
-from app.services.agent_service import MODEL_NAME, client  # shared Gemini client and model
+from app.services.agent_service import MODEL_NAME, client 
 
-# A small fixed vocabulary keeps colours comparable across items for the outfit algorithm.
 COLOR_VOCAB = [
     "black", "white", "gray", "beige", "brown", "tan", "cream", "navy", "blue", "light blue",
     "teal", "green", "olive", "yellow", "orange", "red", "burgundy", "pink", "purple", "gold",
