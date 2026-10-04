@@ -5,7 +5,9 @@ import Waveform from '../components/Waveform'
 import { supabase } from '../lib/supabase'
 import { speak } from '../lib/tts'
 import type { ItemUploadRequest, ItemUploadResponse, RoastImageResponse } from '../lib/types'
+import { getCurrentMonth } from '../lib/utils'
 
+const month = getCurrentMonth()
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 const STORAGE_BUCKET = 'closet-items'
 const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
@@ -14,6 +16,14 @@ const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
   'image/webp',
   'image/gif',
 ]
+
+// The shortest sentence of at least four words tends to be the punchiest line
+const pickPullQuote = (text: string) => {
+  const sentences = text.match(/[^.!?]+[.!?]+/g)?.map((s) => s.trim()) ?? []
+  const candidates = sentences.filter((s) => s.split(/\s+/).length >= 4)
+  if (candidates.length === 0) return sentences[0] ?? text
+  return candidates.reduce((shortest, s) => (s.length < shortest.length ? s : shortest))
+}
 
 export default function Critique() {
   const navigate = useNavigate()
@@ -180,16 +190,32 @@ export default function Critique() {
       ) : (
         <main className="critique-layout">
           <section className="panel photo-panel">
-            <img src={photoUrl} alt="Your outfit" />
+            {/* Blurred copy fills the frame around the uncropped photo */}
+            <img className="photo-backdrop" src={photoUrl} alt="" aria-hidden="true" />
+            <img className="photo" src={photoUrl} alt="Your outfit" />
+          </section>
+
+          <section className="pull-quote" aria-hidden="true">
+            <span className="pull-quote-mark">“</span>
+            {roastText ? (
+              <blockquote key={roastText}>{pickPullQuote(roastText)}</blockquote>
+            ) : (
+              <blockquote className={error ? '' : 'pending'}>
+                {error ? 'No comment.' : 'Under review…'}
+              </blockquote>
+            )}
+            <span className="pull-quote-byline">— The Editor, {month} Issue</span>
           </section>
 
           <section className="panel verdict-panel" aria-live="polite">
             <span className="panel-eyebrow">THE VERDICT</span>
             <h2>Fit Check</h2>
 
-            {status && <p className="status" role="status">{status}</p>}
-            {error && <div className="error-message" role="alert">{error}</div>}
-            {roastText && <p className="roast-text">{roastText}</p>}
+            <div className="verdict-body">
+              {status && <p className="status" role="status">{status}</p>}
+              {error && <div className="error-message" role="alert">{error}</div>}
+              {roastText && <p className="roast-text">{roastText}</p>}
+            </div>
             <Waveform analyser={analyser} playing={isSpeaking} />
           </section>
         </main>
@@ -215,9 +241,11 @@ const styles = `
     --gray-500: #6b7280;
     --gray-700: #374151;
 
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
     box-sizing: border-box;
-    padding: 24px 4vw 70px;
+    padding: 24px 4vw 32px;
     background: #fafafa;
     color: var(--black);
     font-family: Inter, Arial, sans-serif;
@@ -284,13 +312,14 @@ const styles = `
     justify-self: end;
   }
 
-  /* LAYOUT: photo in the left third, verdict in the right third */
+  /* LAYOUT: photo | pull quote | verdict, filling the rest of the viewport */
 
   .critique-layout {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 28px;
-    align-items: start;
   }
 
   .critique-page .panel {
@@ -302,25 +331,88 @@ const styles = `
   }
 
   .photo-panel {
-    grid-column: 1;
-    padding: 12px !important;
+    position: relative;
+    overflow: hidden;
+    padding: 0 !important;
+    background: var(--black) !important;
   }
 
   .photo-panel img {
-    display: block;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    max-height: 72vh;
+    height: 100%;
+  }
+
+  .photo-backdrop {
+    object-fit: cover;
+    filter: blur(28px) brightness(0.85);
+    transform: scale(1.2);
+  }
+
+  .photo-panel .photo {
     object-fit: contain;
-    border-radius: 12px;
+    animation: photo-in 0.6s ease-out;
+  }
+
+  /* PULL QUOTE */
+
+  .pull-quote {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 8px;
+    border-top: 3px double var(--black);
+    border-bottom: 3px double var(--black);
+    font-family: 'Bodoni Moda', Didot, 'Times New Roman', serif;
+  }
+
+  .pull-quote-mark {
+    height: 0.55em;
+    color: var(--red);
+    font-size: clamp(120px, 12vw, 200px);
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .pull-quote blockquote {
+    margin: 0;
+    font-size: clamp(26px, 2.6vw, 44px);
+    font-style: italic;
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    animation: quote-in 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  .pull-quote blockquote.pending {
+    color: var(--gray-400);
+    animation: pending 1.6s ease-in-out infinite;
+  }
+
+  .pull-quote-byline {
+    margin-top: 22px;
+    color: var(--gray-500);
+    font-size: 14px;
+    font-style: italic;
   }
 
   .verdict-panel {
-    grid-column: 3;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    max-height: 72vh;
+    min-height: 0;
+  }
+
+  .verdict-body {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
+  }
+
+  .verdict-panel .waveform {
+    flex-shrink: 0;
+    height: 120px;
   }
 
   .verdict-panel h2 {
@@ -343,6 +435,21 @@ const styles = `
     font-size: 17px;
     line-height: 1.55;
     white-space: pre-wrap;
+  }
+
+  @keyframes photo-in {
+    from { opacity: 0; transform: scale(1.03); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes quote-in {
+    from { opacity: 0; letter-spacing: 0.04em; filter: blur(6px); }
+    to   { opacity: 1; letter-spacing: -0.02em; filter: blur(0); }
+  }
+
+  @keyframes pending {
+    0%, 100% { opacity: 0.35; }
+    50%      { opacity: 1; }
   }
 
   /* BUTTONS */
@@ -413,6 +520,11 @@ const styles = `
   /* RESPONSIVE */
 
   @media (max-width: 800px) {
+    .critique-page {
+      height: auto;
+      min-height: 100vh;
+    }
+
     .critique-header {
       grid-template-columns: 1fr 1fr;
     }
@@ -430,10 +542,16 @@ const styles = `
       grid-template-columns: 1fr;
     }
 
-    .photo-panel,
-    .verdict-panel {
-      grid-column: auto;
-      max-height: none;
+    .photo-panel {
+      height: 65vh;
+    }
+
+    .pull-quote {
+      padding: 24px 4px;
+    }
+
+    .verdict-body {
+      overflow: visible;
     }
   }
 
