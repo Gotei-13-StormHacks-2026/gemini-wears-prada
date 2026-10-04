@@ -121,7 +121,7 @@ export default function Wardrobe() {
           'Choose a JPEG, PNG, WebP, or GIF image.',
         )
       }
-
+      
       if (!supabase) {
         throw new Error(
           'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment.',

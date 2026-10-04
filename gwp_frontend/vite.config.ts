@@ -4,7 +4,7 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  envDir: '../gwp_backend',
+  envDir: '../gwp_frontend',
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] })
