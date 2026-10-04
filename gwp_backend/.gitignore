@@ -1,5 +1,6 @@
 # Ignore environment variables 
 .env
+.env.local
 
 # Ignore virtual environment directories
 .venv
