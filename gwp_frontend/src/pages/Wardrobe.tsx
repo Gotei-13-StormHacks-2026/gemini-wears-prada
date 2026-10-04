@@ -35,7 +35,7 @@ const pickRandom = <T,>(arr: T[]) =>
 
 const toWardrobeItem = (item: ItemRecord): WardrobeItemData => ({
   id: item.item_id,
-  name: item.name ?? item.description,
+  name: item.name,
   category: (
     item.category.charAt(0).toUpperCase() + item.category.slice(1)
   ) as Category,
@@ -102,7 +102,7 @@ export default function Wardrobe() {
     file: File
     name?: string
     notes?: string
-    category: string
+    category?: string
   }) => {
     if (isSaving) return
 
@@ -189,7 +189,7 @@ export default function Wardrobe() {
             image_ref: upload.image_ref,
             name: name || undefined,
             notes: notes || undefined,
-            category: category.toLowerCase() as ItemCategory,
+            category: category ? category.toLowerCase() as ItemCategory : undefined,
           } satisfies ItemCreate),
         },
       )

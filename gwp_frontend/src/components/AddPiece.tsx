@@ -7,7 +7,7 @@ type AddPieceProps = {
     file: File;
     name?: string;
     notes?: string;
-    category: string;
+    category?: string;
   }) => Promise<void>;
 };
 
@@ -27,7 +27,7 @@ export default function AddPiece({
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
-  const [category, setCategory] = useState("shirt");
+  const [category, setCategory] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
 
@@ -54,19 +54,19 @@ export default function AddPiece({
   };
 
   const handleSubmit = async () => {
-    if (!file || isSaving || !name) return; // for now, require a name for the piece
+    if (!file || isSaving) return;
 
     await onAdd({
       file,
       name: name.trim() || undefined,
       notes: notes.trim() || undefined,
-      category,
+      category: category ||  undefined
     });
 
     setFile(null);
     setName("");
     setNotes("");
-    setCategory("shirt");
+    setCategory("");
     setPreview(null);
   };
 
@@ -156,7 +156,7 @@ export default function AddPiece({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Blue Oxford Shirt"
+              placeholder="e.g. White T-Shirt (optional)"
             />
           </label>
 
@@ -164,15 +164,16 @@ export default function AddPiece({
             <span>Category</span>
 
             <select
-              value={category}
+              value={category ?? ""}
               onChange={(e) =>
-                setCategory(e.target.value)
+                setCategory(e.target.value || null)
               }
             >
+              <option value="">Select category (optional)</option>
+
               {CATEGORIES.map((item) => (
                 <option key={item} value={item}>
-                  {item.charAt(0).toUpperCase() +
-                    item.slice(1)}
+                  {item.charAt(0).toUpperCase() + item.slice(1)}
                 </option>
               ))}
             </select>
@@ -184,7 +185,7 @@ export default function AddPiece({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Anything you'd like to remember about this piece..."
+              placeholder="Any additional details about this piece... (optional)"
               rows={4}
             />
           </label>
