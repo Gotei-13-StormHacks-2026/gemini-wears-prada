@@ -77,10 +77,15 @@ async def extract_outfit_as_stickers(item: ItemCreate) -> ItemRecord:
     sticker_ref = f"stickers/{item_id}.png"
     await bucket.upload(sticker_ref, sticker, {"content-type": "image/png"})
 
+    # User-provided values always take priority over AI-generated values.
+    if item.name is not None:
+        metadata_dict["name"] = item.name
+    if item.category is not None:
+        metadata_dict["category"] = item.category
+
     return ItemRecord(
         item_id=item_id,
         image_ref=sticker_ref,
-        name=item.name,
         notes=item.notes,
         **metadata.model_dump(),
     )
