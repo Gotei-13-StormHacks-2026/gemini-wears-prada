@@ -3,3 +3,4 @@ google-genai>=1
 pydantic>=2,<3
 requests>=2.32
 uvicorn[standard]>=0.34
+pytest>=8
