@@ -1,5 +1,10 @@
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException
+import logging
+
+from fastapi import APIRouter, HTTPException
+from app.data.models import RoastImageRequest
 from app.services.roast_service import generate_roast_for_image
+
+logger = logging.getLogger(__name__)
 
 # Create a dedicated router for everything relating to vision processing
 router = APIRouter(
@@ -8,17 +13,19 @@ router = APIRouter(
 )
 
 @router.post("/roast-image")
-async def analyze_uploaded_image(image_path: str):
-
+async def analyze_uploaded_image(request: RoastImageRequest):
     try:        
-        # Dispatch the payload with image_url directly to your service layer
-        ai_response = await generate_roast_for_image(image_path=image_path)
+        ai_response = await generate_roast_for_image(image_ref=request.image_ref)
         
         return {
             "status": "success",
             "roast_text": ai_response
         }
         
-    except Exception as e:
-        # Prevent completely crashing the server thread on upstream SDK failures
-        raise HTTPException(status_code=500, detail=f"Gemini processing error: {str(e)}")
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        logger.exception("Fit Check roast generation failed")
+        raise HTTPException(status_code=502, detail="Fit Check analysis failed.") from error

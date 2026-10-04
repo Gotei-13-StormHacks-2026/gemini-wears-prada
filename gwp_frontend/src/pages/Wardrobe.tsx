@@ -1,12 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import WardrobeItem from '../components/WardrobeItem'
-import { CATEGORIES, type Category, type WardrobeItemData } from '../lib/types'
+import { supabase } from '../lib/supabase'
+import {
+  CATEGORIES,
+  type Category,
+  type ItemCategory,
+  type ItemCreate,
+  type ItemRecord,
+  type ItemUploadRequest,
+  type ItemUploadResponse,
+  type WardrobeItemData,
+} from '../lib/types'
 
 const SEASONS = ['Spring', 'Summer', 'Fall', 'Winter']
 const DRESS_CODES = ['Casual', 'Smart Casual', 'Business', 'Formal', 'Athletic']
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const STORAGE_BUCKET = 'closet-items'
+const SUPPORTED_IMAGE_TYPES: ItemUploadRequest['content_type'][] = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]
 
 const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)]
+
+const toWardrobeItem = (item: ItemRecord): WardrobeItemData => ({
+  id: item.item_id,
+  name: item.name ?? item.description,
+  category: (item.category.charAt(0).toUpperCase() + item.category.slice(1)) as Category,
+  imageUrl: item.image_url ?? '',
+  description: item.description,
+  primaryColor: item.primary_color,
+  secondaryColor: item.secondary_color,
+  notes: item.notes ?? '',
+})
 
 export default function Wardrobe() {
   const navigate = useNavigate()
@@ -18,28 +47,102 @@ export default function Wardrobe() {
   const [category, setCategory] = useState<Category>('Top')
   const [notes, setNotes] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [itemsError, setItemsError] = useState<string | null>(null)
 
   // outfit generator state
   const [season, setSeason] = useState(SEASONS[0])
   const [dressCode, setDressCode] = useState(DRESS_CODES[0])
   const [outfit, setOutfit] = useState<WardrobeItemData[] | null>(null)
 
-  const addPiece = () => {
-    if (!file || !name.trim()) return
-    setItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        name: name.trim(),
-        category,
-        notes: notes.trim(),
-        imageUrl: URL.createObjectURL(file),
-      },
-    ])
-    setName('')
-    setNotes('')
-    setFile(null)
-    setShowAdd(false)
+  useEffect(() => {
+    let cancelled = false
+
+    const loadItems = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/closet/items`)
+        if (!response.ok) throw new Error('Could not load closet items.')
+        const result = (await response.json()) as { data: ItemRecord[] }
+        if (!cancelled) setItems(result.data.map(toWardrobeItem))
+      } catch (error) {
+        if (!cancelled) {
+          setItemsError(error instanceof Error ? error.message : 'Could not load closet items.')
+        }
+      }
+    }
+
+    void loadItems()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const addPiece = async () => {
+    if (!file || !name.trim() || isSaving) return
+
+    setIsSaving(true)
+    setUploadError(null)
+
+    try {
+      if (!SUPPORTED_IMAGE_TYPES.includes(file.type as ItemUploadRequest['content_type'])) {
+        throw new Error('Choose a JPEG, PNG, WebP, or GIF image.')
+      }
+      if (!supabase) {
+        throw new Error('Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the frontend environment.')
+      }
+
+      const uploadRequest: ItemUploadRequest = {
+        content_type: file.type as ItemUploadRequest['content_type'],
+      }
+      const uploadUrlResponse = await fetch(`${API_BASE_URL}/api/closet/items/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(uploadRequest),
+      })
+      if (!uploadUrlResponse.ok) {
+        const body = await uploadUrlResponse.json().catch(() => null)
+        throw new Error(typeof body?.detail === 'string' ? body.detail : 'Could not prepare the image upload.')
+      }
+
+      const upload = (await uploadUrlResponse.json()) as ItemUploadResponse
+      const { error: storageError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .uploadToSignedUrl(upload.image_ref, upload.token, file, { contentType: file.type })
+      if (storageError) throw storageError
+
+      const itemResponse = await fetch(`${API_BASE_URL}/api/closet/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_ref: upload.image_ref,
+          name: name.trim(),
+          notes: notes.trim(),
+          category: category.toLowerCase() as ItemCategory,
+        } satisfies ItemCreate),
+      })
+      if (!itemResponse.ok) {
+        const body = await itemResponse.json().catch(() => null)
+        throw new Error(
+          typeof body?.detail === 'string'
+            ? body.detail
+            : 'The image uploaded, but the item could not be created.',
+        )
+      }
+
+      const createdItem = (await itemResponse.json()) as ItemRecord
+      const wardrobeItem = toWardrobeItem(createdItem)
+      if (!wardrobeItem.imageUrl) wardrobeItem.imageUrl = URL.createObjectURL(file)
+      setItems((previous) => [wardrobeItem, ...previous])
+      setName('')
+      setNotes('')
+      setFile(null)
+      setShowAdd(false)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Could not add this item.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const updatePiece = (updated: WardrobeItemData) => {
@@ -77,6 +180,8 @@ export default function Wardrobe() {
         </button>
       </header>
 
+      {itemsError && <p role="alert">{itemsError}</p>}
+
       {showAdd && (
         <div className="add-panel">
           <input
@@ -93,7 +198,10 @@ export default function Wardrobe() {
             onChange={(e) => setNotes(e.target.value)}
           />
           <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <button className="w-btn" onClick={addPiece} disabled={!file || !name.trim()}>Save</button>
+          <button className="w-btn" onClick={addPiece} disabled={!file || !name.trim() || isSaving}>
+            {isSaving ? 'Uploading...' : 'Save'}
+          </button>
+          {uploadError && <p role="alert">{uploadError}</p>}
         </div>
       )}
 

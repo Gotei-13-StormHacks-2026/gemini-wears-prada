@@ -66,6 +66,12 @@ export default function WardrobeItem({ item, onUpdate, onRemove }: Props) {
         <div className="w-item-body">
           <strong>{item.name}</strong>
           <span className="w-item-category">{item.category}</span>
+          {item.description && <p className="w-item-analysis">{item.description}</p>}
+          {(item.primaryColor || item.secondaryColor) && (
+            <span className="w-item-colors">
+              Colors: {[item.primaryColor, item.secondaryColor].filter(Boolean).join(', ')}
+            </span>
+          )}
           {item.notes && <p className="w-item-notes">{item.notes}</p>}
 
           {(onUpdate || onRemove) && (
@@ -97,6 +103,7 @@ export default function WardrobeItem({ item, onUpdate, onRemove }: Props) {
         .w-item img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; }
         .w-item-body { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
         .w-item-category { font-style: italic; font-size: 14px; }
+        .w-item-analysis, .w-item-colors { margin: 0; font-size: 14px; }
         .w-item-notes { margin: 0; font-size: 14px; white-space: pre-wrap; }
         .w-item-body input, .w-item-body select, .w-item-body textarea {
           font-family: inherit;
