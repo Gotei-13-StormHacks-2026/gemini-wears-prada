@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getCurrentMonth } from '../lib/utils'
 
 import logo from '../assets/gwp_logo_best.png'
 import UploadModal from '../components/UploadModal'
 
-const month = new Date().toLocaleString('en-US', { month: 'long' })
+const month = getCurrentMonth()
 
 function Homepage() {
   const navigate = useNavigate()
