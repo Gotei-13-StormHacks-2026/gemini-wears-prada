@@ -213,6 +213,12 @@ export default function AddPiece({
       </div>
 
       <style>{`
+        .add-panel {
+          width: min(850px, calc(100% - 32px));
+          margin: 0 auto;
+          box-sizing: border-box;
+        }
+          
         .photo-options {
           display: flex;
           flex-direction: column;
